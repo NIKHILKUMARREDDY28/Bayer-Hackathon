@@ -1,27 +1,26 @@
-# Use a Python image with uv pre-installed
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+# Use AWS Lambda Python base image (MANDATORY for Lambda)
+FROM public.ecr.aws/lambda/python:3.12
 
-# Copy AWS Lambda Web Adapter
+# Copy AWS Lambda Web Adapter extension
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
 
 # Set working directory
-WORKDIR /app
+WORKDIR /var/task
 
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
-ENV PORT=8501
-
-# Copy dependency files first
+# Copy dependency files
 COPY pyproject.toml uv.lock ./
 
-# Install dependencies
-# --frozen ensures we stick to the lockfile
-# --no-install-project means we don't install the current package itself (yet), just dependencies
-RUN uv sync --frozen --no-install-project --no-dev
+# Install uv first
+RUN pip install --no-cache-dir uv
 
-# Copy the rest of the application
+# Install dependencies from lockfile
+RUN uv sync --frozen --no-dev
+
+# Copy application code
 COPY . .
 
-# Run the application
-# We use `uv run` to ensure it uses the virtual environment created by uv
-ENTRYPOINT ["uv", "run", "streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Expose port used by web adapter
+ENV PORT=8501
+
+# Start Streamlit via Lambda Web Adapter
+CMD ["uv", "run", "streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
